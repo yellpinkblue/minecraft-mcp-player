@@ -1,133 +1,126 @@
-# Minecraft MCP Server
+# Minecraft MCP Player
 
-<a href="https://github.com/yuniko-software/minecraft-mcp-server/actions">
-  <img alt="CI" src="https://github.com/yuniko-software/minecraft-mcp-server/actions/workflows/build.yml/badge.svg">
-</a>
-<a href="https://github.com/yuniko-software">
-  <img alt="Contribution Welcome" src="https://img.shields.io/badge/Contribution-Welcome-blue">
-</a>
-<a href="https://github.com/yuniko-software/minecraft-mcp-server/releases/latest">
-  <img alt="Latest Release" src="https://img.shields.io/github/v/release/yuniko-software/minecraft-mcp-server?label=Latest%20Release">
-</a>
+Control **your own Minecraft Java character** with Codex or another MCP client, in a normal single-player world. No second bot player, browser game, dedicated server, or Open to LAN is needed in native player mode.
 
-<img width="2063" height="757" alt="image" src="https://github.com/user-attachments/assets/3f0f0438-f079-4226-90bd-87b9e1311d19" />
+This is a derivative of [yuniko-software/minecraft-mcp-server](https://github.com/yuniko-software/minecraft-mcp-server), based on commit `240c8cec337ce152cc9e058ebdef511055808406`. It preserves the original 22 MCP tools and adds a Fabric client execution backend, `get-state`, and `stop-actions` (24 tools total). The original Mineflayer bot backend is still available.
 
-___
+**Status:** experimental, working prototype. The project owner tested Codex controlling the player in **survival mode**, including autonomous item collection, and reported that it plays relatively smoothly. A separate developer smoke test verified an actual native-player jump (about 1.25 blocks), a block query, and stopping. A simulated Fabric peer verified dispatch of all 22 original tools and cancellation over real MCP stdio. This does not establish that every recipe, terrain, creative-mode action, or complex building task works.
 
-> [!IMPORTANT]
-> Currently supports Minecraft version 1.21.11. Newer versions may not work with this MCP server, but we will add support as soon as possible.
+[中文说明](README.zh-CN.md) · [Original upstream README](README.upstream.md)
 
-https://github.com/user-attachments/assets/6f17f329-3991-4bc7-badd-7cde9aacb92f
+## How it works
 
-A Minecraft bot powered by large language models and [Mineflayer API](https://github.com/PrismarineJS/mineflayer). This bot uses the [Model Context Protocol](https://github.com/modelcontextprotocol) (MCP) to enable Claude and other supported models to control a Minecraft character.
-
-<a href="https://glama.ai/mcp/servers/@yuniko-software/minecraft-mcp-server">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@yuniko-software/minecraft-mcp-server/badge" alt="mcp-minecraft MCP server" />
-</a>
-
-## Prerequisites
-
-- Git
-- Node.js (>= 20.10.0)
-- A running Minecraft game (the setup below was tested with Minecraft 1.21.8 Java Edition included in Microsoft Game Pass)
-- An MCP-compatible client. Claude Desktop will be used as an example, but other MCP clients are also supported
-
-## Getting started
-
-This bot is designed to be used with Claude Desktop through the Model Context Protocol (MCP).
-
-### Run Minecraft
-
-Create a singleplayer world and open it to LAN (`ESC -> Open to LAN`). Bot will try to connect using port `25565` and hostname `localhost`. These parameters could be configured in `claude_desktop_config.json` on a next step. 
-
-### MCP Configuration
-
-Make sure that [Claude Desktop](https://claude.ai/download) is installed. Open `File -> Settings -> Developer -> Edit Config`. It should open installation directory. Find file with a name `claude_desktop_config.json` and insert the following code:
-
-```json
-{
-  "mcpServers": {
-    "minecraft": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "github:yuniko-software/minecraft-mcp-server",
-        "--host",
-        "localhost",
-        "--port",
-        "25565",
-        "--username",
-        "ClaudeBot"
-      ]
-    }
-  }
-}
+```text
+Codex / MCP client -> MCP stdio server -> authenticated localhost bridge
+                                         -> Fabric mod -> your Minecraft player
 ```
 
-Double-check that right `--port` and `--host` parameters were used. Make sure to completely reboot the Claude Desktop application (should be closed in OS tray). 
+The model receives the tool descriptions and schemas through MCP. It plans actions, calls tools, examines actual results, and chooses the next step. The server itself does not require an Alibaba or OpenAI API key. Your MCP client provides the model. Voice UI and paid voice services are not included in this repository.
 
-## Running
+## Requirements
 
-Make sure Minecraft game is running and the world is opened to LAN. Then start Claude Desktop application and the bot should join the game. 
+- Minecraft **Java 1.21.11**, **Fabric Loader 0.18.4**, **Fabric API 0.141.6+1.21.11**.
+- Java **21**; Node.js **22+** recommended (upstream supports >=20.10).
+- **Baritone API Fabric 1.17.0**, installed as a separate mod and used as a build dependency.
+- Codex or another local MCP client. Windows was used for actual gameplay testing; other operating systems are not gameplay-validated.
 
-**It could take some time for Claude Desktop to boot the MCP server**. The marker that the server has booted successfully:
+Survival mode is the recommended starting point. `fly-to` requires the player to have flight permission (normally creative mode); it does not grant flight or run cheats.
 
-<img width="885" height="670" alt="image" src="https://github.com/user-attachments/assets/ccbb42f8-6544-462c-8ac1-8af13ddfcddd" />
+## Install and build
 
-You can give bot any commands through any active Claude Desktop chat. You can also upload images of buildings and ask bot to build them 😁
+Clone this repository and open a terminal in its root:
 
-Don't forget to mention that bot should do something in Minecraft in your prompt. Because saying this is a trigger to run MCP server. It will ask for your permissions.
+```sh
+npm ci
+npm run build
+node scripts/fetch-baritone.mjs
+```
 
-Using Claude Sonnet could give you some interesting results. The bot-agent would be really smart 🫡
+The fetch script downloads the separate Baritone jar from its upstream release and verifies its SHA256. Build the Fabric mod with Java 21:
 
-Example usage: [shared Claude chat](https://claude.ai/share/535d5f69-f102-4cdb-9801-f74ea5709c0b)
+```sh
+cd fabric-mod
+# Windows:
+.\gradlew.bat build
+# Linux/macOS instead:
+./gradlew build
+```
 
-## Available Commands
+Copy these jars into the `mods` folder of the Minecraft instance you actually launch:
 
-Once connected to a Minecraft server, Claude can use these commands:
+- Fabric API for the version above (obtain it separately).
+- `fabric-mod/libs/baritone-api-fabric-1.17.0.jar`.
+- `fabric-mod/build/libs/astra-voice-1.0.0.jar` (the runtime jar, not the `-sources.jar`).
 
-### Movement
-- `get-position` - Get the current position of the bot
-- `move-to-position` - Move to specific coordinates
-- `look-at` - Make the bot look at specific coordinates
-- `jump` - Make the bot jump
-- `move-in-direction` - Move in a specific direction for a duration
+Back at the repository root, generate the local pairing file, using **your actual game instance directory** (the folder containing `mods`, `config`, and `saves`):
 
-### Flight
-- `fly-to` - Make the bot fly directly to specific coordinates
+```sh
+node scripts/init-player-config.mjs "C:/path/to/your/minecraft-instance"
+```
 
-### Inventory
-- `list-inventory` - List all items in the bot's inventory
-- `find-item` - Find a specific item in inventory
-- `equip-item` - Equip a specific item
+This generates a random local token and refuses to overwrite an existing `config/astra-voice.json`. For an existing installation, reuse its pairing file and set `backend.autoStart` to `false` to keep an old voice backend from competing with the MCP bridge. Never publish the pairing file.
 
-### Block Interaction
-- `place-block` - Place a block at specified coordinates
-- `dig-block` - Dig a block at specified coordinates
-- `get-block-info` - Get information about a block
-- `find-blocks` - Find one or more nearby blocks of a specific type
+## Connect Codex
 
-### Furnace
-- `smelt-item` - Smelt items using a furnace-like block
+Add the following to your Codex `config.toml` (normally `%USERPROFILE%/.codex/config.toml` on Windows). Replace both paths. Existing settings should be preserved.
 
-### Entity Interaction
-- `find-entity` - Find the nearest entity of a specific type
+```toml
+[mcp_servers.minecraft]
+command = "node"
+args = ["C:/path/to/minecraft-mcp-player/dist/main.js", "--control", "player", "--player-config", "C:/path/to/your/minecraft-instance/config/astra-voice.json"]
+startup_timeout_sec = 30
+tool_timeout_sec = 300
+```
 
-### Communication
-- `send-chat` - Send a chat message in-game
-- `read-chat` - Get recent chat messages from players
+Use the absolute path to `node.exe` if your desktop app cannot find Node on PATH. No `MINECRAFT_PLAYER_PROJECT` variable or separate voice-project installation is needed for a fresh installation of this repository.
 
-### Game State
-- `detect-gamemode` - Detect the gamemode on game
+Fully restart Codex, use a **local session on the computer running Minecraft**, launch the Fabric profile, enter a single-player world, and close all game menus. Close any other voice/MCP backend using port 8765 first; only one backend can own that bridge at a time. If the connection has not appeared, run `/astra connect` in Minecraft.
 
-## Contributing
+Try this first:
 
-Feel free to submit pull requests or open issues for improvements. All refactoring commits, functional and test contributions, issues and discussion are greatly appreciated!
+> Use the minecraft MCP to inspect my player state and inventory. Then jump once and report the observed result.
 
-To get started with contributing, please see [CONTRIBUTING.md](CONTRIBUTING.md).
+Then try a survival goal:
 
----
+> Collect enough wood to craft a crafting table and a wooden pickaxe. Check the results after each step and tell me if you get stuck.
 
-⭐ If you find this project useful, please consider giving it a star on GitHub! ⭐
+The MCP welcome enables control once per world session. **F9 in Minecraft stops and disarms control. F8 enables it again** after you close menus and release movement keys. Reconnecting after a stop may require F8. `stop-actions` cancels current work but does not provide the same persistent disarm as F9.
 
-Your support helps make this project more visible to other people who might benefit from it.
+Switching focus can pause single-player Minecraft. Turn off **Pause on lost focus** (F3+P in Java Edition) if needed and leave the game out of menus. If actions are rejected, inspect `get-state` and `/astra status` before retrying.
+
+## Tools
+
+| Category | MCP tools |
+| --- | --- |
+| State and stopping | `get-state`, `stop-actions`, `get-position`, `detect-gamemode` |
+| Movement and looking | `move-to-position`, `move-in-direction`, `look-at`, `jump`, `fly-to` |
+| Inventory | `list-inventory`, `find-item`, `equip-item` |
+| Blocks and entities | `get-block-info`, `find-blocks`, `find-entity`, `dig-block`, `place-block` |
+| Crafting and smelting | `list-recipes`, `get-recipe`, `can-craft`, `craft-item`, `smelt-item` |
+| Chat | `send-chat`, `read-chat` |
+
+Tools operate through normal client mechanics and the installed Baritone API. Queries cover loaded nearby terrain, not the whole world. Navigation can fail on difficult terrain. Crafting supports the translated vanilla recipes; arbitrary modded recipes are not guaranteed. Smelting uses an available furnace/blast furnace/smoker and conservatively rejects occupied slots. Container GUI mirroring, complete chest management, automatic combat, and reliable autonomous large builds are not implemented merely by exposing these tools.
+
+Original bot mode remains the default for compatibility. Always pass **`--control player --player-config ...`** for your own character. Without those flags the upstream Mineflayer backend is used; see the upstream README for bot/server instructions.
+
+## Development and checks
+
+```sh
+npm run build
+npm test
+npm run test:native
+```
+
+`test:native` uses a simulated Fabric peer and real MCP SDK stdio transport, and makes no cloud/model calls. It is a transport and mapping check, not a gameplay benchmark. The Fabric sources also include Java unit tests run by Gradle's `build` task.
+
+## Dependency status
+
+The retained upstream dependency tree currently has unresolved npm audit advisories. This prototype is intended for a local trusted MCP client and loopback bridge; it has not undergone a security audit. Dependency upgrades are separate work and are not silently applied as part of this fork.
+
+## Attribution and licensing
+
+- Original MCP server: **yuniko-software/minecraft-mcp-server**, Apache-2.0. Original Git history and the root `LICENSE` are preserved. The native TypeScript adapter and repository helper scripts are distributed under Apache-2.0.
+- Fabric controller: adapted from **tommywalteryespls-bit/minecraft-ai-player** (base commit `d77377957fbfbb55de179165165421c160b0aa9c`) and extended locally for native MCP. Its MIT license is preserved in `fabric-mod/LICENSE`.
+- Mindcraft references and separately installed **Baritone** (LGPL-3.0): see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Baritone remains a separate, replaceable dependency; its binary is not committed here.
+
+Minecraft, Fabric API, Node.js, Java runtimes, accounts, model keys, game saves, and local pairing tokens are not bundled. This project is not affiliated with Mojang or Microsoft.

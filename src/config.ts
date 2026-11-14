@@ -5,6 +5,8 @@ export interface ServerConfig {
   host: string;
   port: number;
   username: string;
+  control: string;
+  playerConfig?: string;
 }
 
 export function parseConfig(): ServerConfig {
@@ -24,6 +26,8 @@ export function parseConfig(): ServerConfig {
       description: 'Bot username',
       default: 'LLMBot'
     })
+    .option('control', {type:'string', choices:['bot','player'], default:'bot'})
+    .option('player-config', {type:'string', describe:'Path to the native Fabric pairing config'})
     .help()
     .alias('help', 'h')
     .parseSync();

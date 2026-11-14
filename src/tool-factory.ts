@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, ZodError, ZodRawShape, ZodType } from "zod";
 import { BotConnection } from './bot-connection.js';
+import { PlayerConnection } from './player-connection.js';
 
 type McpResponse = {
   content: { type: "text"; text: string }[];
@@ -11,7 +12,7 @@ type McpResponse = {
 export class ToolFactory {
   constructor(
     private server: McpServer,
-    private connection: BotConnection
+    private connection: BotConnection | PlayerConnection
   ) {}
 
   registerTool(
@@ -21,7 +22,7 @@ export class ToolFactory {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     executor: (args: any) => Promise<McpResponse>
   ): void {
-    this.server.tool(name, description, schema, async (args: unknown): Promise<McpResponse> => {
+    this.server.tool(name, this.connection instanceof PlayerConnection ? description.replace(/\bbot\b/g, 'player') : description, schema, async (args: unknown, extra): Promise<McpResponse> => {
       const connectionCheck = await this.connection.checkConnectionAndReconnect();
 
       if (!connectionCheck.connected) {
@@ -35,6 +36,9 @@ export class ToolFactory {
         const parsedArgs = this.shouldValidateSchema(schema)
           ? this.parseArgs(schema as ZodRawShape, args)
           : args;
+        if (this.connection instanceof PlayerConnection) {
+          return await this.connection.callTool(name, parsedArgs as Record<string, unknown>, extra.signal);
+        }
         return await executor(parsedArgs);
       } catch (error) {
         return this.createErrorResponse(error as Error);

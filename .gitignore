@@ -24,3 +24,18 @@ pids/
 # Claude Code configuration
 .claude
 .idea
+
+# Local runtime and credentials
+**/node_modules/
+**/dist/
+**/.gradle/
+**/build/
+fabric-mod/libs/
+.env*
+!*.example
+**/astra-voice.json
+**/*private.json
+*.log
+data/
+saves/
+logs/

@@ -1,0 +1,10 @@
+import {randomBytes} from 'node:crypto';
+import {mkdir, writeFile} from 'node:fs/promises';
+import path from 'node:path';
+const gameDirectory = process.argv[2];
+if (!gameDirectory) throw Error('Usage: node scripts/init-player-config.mjs <Minecraft game directory>');
+const directory = path.resolve(gameDirectory, 'config');
+await mkdir(directory, {recursive:true});
+const file = path.join(directory, 'astra-voice.json');
+await writeFile(file, JSON.stringify({bridgePort:8765, voicePort:3001, token:randomBytes(32).toString('hex'), backend:{autoStart:false}}, null, 2)+'\n', {flag:'wx', mode:0o600});
+console.log(`Created ${file}. Keep this local pairing file private. Existing files are never overwritten.`);

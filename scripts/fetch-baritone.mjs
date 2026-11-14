@@ -1,0 +1,12 @@
+import {createHash} from 'node:crypto';
+import {mkdir,writeFile} from 'node:fs/promises';
+const version='1.17.0';
+const sha256='a1646893c2a6338ea6bf1a3bdecf2cd743ede61e31a4324bd79a82f3d03360f9';
+const name=`baritone-api-fabric-${version}.jar`;
+const response=await fetch(`https://github.com/cabaletta/baritone/releases/download/v${version}/${name}`);
+if(!response.ok)throw Error(`Baritone download failed: ${response.status}`);
+const data=Buffer.from(await response.arrayBuffer());
+if(createHash('sha256').update(data).digest('hex')!==sha256)throw Error('Baritone SHA256 mismatch');
+const dir=new URL('../fabric-mod/libs/',import.meta.url);
+await mkdir(dir,{recursive:true});await writeFile(new URL(name,dir),data);
+console.log(`Verified ${name} for Minecraft 1.21.11`);

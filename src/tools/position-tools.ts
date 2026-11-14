@@ -102,9 +102,19 @@ export function registerPositionTools(factory: ToolFactory, getBot: () => minefl
     {},
     async () => {
       const bot = getBot();
+      const startY = bot.entity.position.y;
+      const epoch = ((bot as any).controlEpoch || 0);
+      let peakY = startY;
       bot.setControlState('jump', true);
-      setTimeout(() => bot.setControlState('jump', false), 250);
-      return factory.createResponse("Successfully jumped");
+      try {
+        for (let i = 0; i < 12; i++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          peakY = Math.max(peakY, bot.entity.position.y);
+          if (((bot as any).controlEpoch || 0) !== epoch) return factory.createErrorResponse("Jump interrupted");
+          if (i === 4) bot.setControlState('jump', false);
+        }
+      } finally { if (((bot as any).controlEpoch || 0) === epoch) bot.setControlState('jump', false); }
+      return peakY - startY > 0.1 ? factory.createResponse(`Jump observed; vertical rise ${Math.round((peakY-startY)*100)/100} blocks.`) : factory.createErrorResponse("Jump was requested, but no upward movement was observed. Check space above and ground contact.");
     }
   );
 
@@ -113,15 +123,19 @@ export function registerPositionTools(factory: ToolFactory, getBot: () => minefl
     "Move the bot in a specific direction for a duration",
     {
       direction: z.enum(['forward', 'back', 'left', 'right']).describe("Direction to move"),
-      duration: z.number().optional().describe("Duration in milliseconds (default: 1000)")
+      duration: z.number().min(50).max(10000).optional().describe("Duration in milliseconds (default: 1000)")
     },
     async ({ direction, duration = 1000 }: { direction: Direction, duration?: number }) => {
       const bot = getBot();
+      const epoch = ((bot as any).controlEpoch || 0);
+      const start = bot.entity.position.clone();
       return new Promise((resolve) => {
         bot.setControlState(direction, true);
         setTimeout(() => {
+          if (((bot as any).controlEpoch || 0) !== epoch) return resolve(factory.createErrorResponse("Movement interrupted"));
           bot.setControlState(direction, false);
-          resolve(factory.createResponse(`Moved ${direction} for ${duration}ms`));
+          const distance = start.distanceTo(bot.entity.position);
+          resolve(distance > 0.05 ? factory.createResponse(`Moved ${direction}; observed displacement ${distance.toFixed(2)} blocks.`) : factory.createErrorResponse("Movement requested, but no displacement observed."));
         }, duration);
       });
     }

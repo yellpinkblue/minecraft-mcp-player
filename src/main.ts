@@ -6,6 +6,7 @@ import { setupStdioFiltering } from './stdio-filter.js';
 import { log } from './logger.js';
 import { parseConfig } from './config.js';
 import { BotConnection } from './bot-connection.js';
+import { PlayerConnection } from './player-connection.js';
 import { ToolFactory } from './tool-factory.js';
 import { MessageStore } from './message-store.js';
 import { registerPositionTools } from './tools/position-tools.js';
@@ -32,7 +33,7 @@ async function main() {
   const config = parseConfig();
   const messageStore = new MessageStore();
 
-  const connection = new BotConnection(
+  const connection = config.control === 'player' ? new PlayerConnection(config) : new BotConnection(
     config,
     {
       onLog: log,
@@ -40,7 +41,7 @@ async function main() {
     }
   );
 
-  connection.connect();
+  await connection.connect();
 
   const server = new McpServer({
     name: "minecraft-mcp-server",
@@ -50,6 +51,19 @@ async function main() {
   const factory = new ToolFactory(server, connection);
   const getBot = () => connection.getBot()!;
 
+  factory.registerTool("stop-actions", "Immediately cancel pathfinding, digging and movement controls", {}, async () => {
+    const bot = getBot();
+    (bot as any).controlEpoch = ((bot as any).controlEpoch || 0) + 1;
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+    bot.stopDigging();
+    return factory.createResponse("Stopped current movement and digging.");
+  });
+  factory.registerTool("get-state", "Inspect actual position, yaw, pitch, health, hunger, inventory, nearby players and the block in front of the bot", {}, async () => {
+    const bot = getBot();
+    const block = bot.blockAtCursor(5);
+    return factory.createResponse(JSON.stringify({position:bot.entity.position,yaw:bot.entity.yaw,pitch:bot.entity.pitch,onGround:bot.entity.onGround,health:bot.health,food:bot.food,inventory:bot.inventory.items().map(i=>({name:i.name,count:i.count})),players:Object.values(bot.players).filter(p=>p.entity && p.username!==bot.username).map(p=>({name:p.username,position:p.entity!.position})),targetBlock:block?{name:block.name,position:block.position}:null}));
+  });
   registerPositionTools(factory, getBot);
   registerInventoryTools(factory, getBot);
   registerBlockTools(factory, getBot);
@@ -60,8 +74,8 @@ async function main() {
   registerCraftingTools(factory, getBot);
   registerFurnaceTools(factory, getBot);
 
-  process.stdin.on('end', () => {
-    connection.cleanup();
+  process.stdin.on('end', async () => {
+    await connection.cleanup();
     log('info', 'MCP Client has disconnected. Shutting down...');
     process.exit(0);
   });
